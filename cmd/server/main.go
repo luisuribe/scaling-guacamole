@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"canvas/server"
 )
@@ -30,9 +31,7 @@ func start() int {
 		fmt.Println("Error setting up the logger:", err)
 		return 1
 	}
-
 	log = log.With(zap.String("release", release))
-
 	defer func() {
 		// If we cannot sync, there's probably something wrong with outputting logs,
 		// so we probably cannot write using fmt.Println either. So just ignore the error.
@@ -44,7 +43,7 @@ func start() int {
 
 	s := server.New(server.Options{
 		Host: host,
-		Log: log,
+		Log:  log,
 		Port: port,
 	})
 
@@ -69,11 +68,27 @@ func start() int {
 	if err := eg.Wait(); err != nil {
 		return 1
 	}
-
 	return 0
 }
 
-// …
+func createLogger(env string) (*zap.Logger, error) {
+	switch env {
+	case "production":
+		return zap.NewProduction()
+	case "development":
+		return zap.NewDevelopment()
+	default:
+		return zap.NewNop(), nil
+	}
+}
+
+func getStringOrDefault(name, defaultV string) string {
+	v, ok := os.LookupEnv(name)
+	if !ok {
+		return defaultV
+	}
+	return v
+}
 
 func getIntOrDefault(name string, defaultV int) int {
 	v, ok := os.LookupEnv(name)
